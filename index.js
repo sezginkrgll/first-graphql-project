@@ -1,11 +1,5 @@
 import { createServer } from "node:http";
-import {
-  createPubSub,
-  createSchema,
-  createYoga,
-  pipe,
-  filter,
-} from "graphql-yoga";
+import { createPubSub, createSchema, createYoga } from "graphql-yoga";
 
 import { nanoid } from "nanoid";
 // import data
