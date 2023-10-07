@@ -1,10 +1,19 @@
-import { ApolloServer } from "@apollo/server";
-import { startStandaloneServer } from "@apollo/server/standalone";
+import { createServer } from "node:http";
+import {
+  createPubSub,
+  createSchema,
+  createYoga,
+  pipe,
+  filter,
+} from "graphql-yoga";
+
 import { nanoid } from "nanoid";
 // import data
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const { events, locations, users, participants } = require("./data.json");
+
+const pubSub = createPubSub();
 
 const typeDefs = `#graphql
   # Event
@@ -135,14 +144,47 @@ const typeDefs = `#graphql
     deleteParticipant(id: ID!): Participant!
     deleteAllParticipants: DeleteAllOutput
   }
+
+  type Subscription {
+    # Event
+    eventCreated: Event!
+    # User
+    userCreated: User!
+    # Participant
+    participantCreated: Participant!
+  }
 `;
 
 const resolvers = {
+  Subscription: {
+    // Event
+    eventCreated: {
+      subscribe: () => {
+        return pubSub.subscribe("eventCreated");
+      },
+      resolve: (payload) => payload,
+    },
+    // User
+    userCreated: {
+      subscribe: () => {
+        return pubSub.subscribe("userCreated");
+      },
+      resolve: (payload) => payload,
+    },
+    // Participant
+    participantCreated: {
+      subscribe: () => {
+        return pubSub.subscribe("participantCreated");
+      },
+      resolve: (payload) => payload,
+    },
+  },
   Mutation: {
     // Event
     createEvent: (_, { data }) => {
       const event = { id: nanoid(), ...data };
       events.push(event);
+      pubSub.publish("eventCreated", event);
       return event;
     },
     updateEvent: (_, { id, data }) => {
@@ -178,6 +220,7 @@ const resolvers = {
     createUser: (_, { data }) => {
       const user = { id: nanoid(), ...data };
       users.push(user);
+      pubSub.publish("userCreated", user);
       return user;
     },
     updateUser: (_, { id, data }) => {
@@ -244,6 +287,7 @@ const resolvers = {
     createParticipant: (_, { data }) => {
       const participant = { id: nanoid(), ...data };
       participants.push(participant);
+      pubSub.publish("participantCreated", participant);
       return participant;
     },
     updateParticipant: (_, { id, data }) => {
@@ -378,13 +422,16 @@ const resolvers = {
   },
 };
 
-const server = new ApolloServer({
-  typeDefs,
-  resolvers,
+// Provide your schema
+const yoga = createYoga({
+  graphqlEndpoint: "/",
+  schema: createSchema({
+    typeDefs,
+    resolvers,
+  }),
 });
 
-const { url } = await startStandaloneServer(server, {
-  listen: { port: 4000 },
+const server = createServer(yoga);
+server.listen(4000, () => {
+  console.info("Server is running on http://localhost:4000");
 });
-
-console.log(`🚀 Server ready at: ${url}`);
